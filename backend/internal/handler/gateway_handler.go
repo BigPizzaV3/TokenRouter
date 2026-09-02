@@ -596,6 +596,18 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 	fallbackUsed := false
 
+	// 记录本次请求注册过会话槽的账号；最终失败时立即释放，避免失败请求占满空闲窗口。
+	sessionSlotAccounts := make(map[int64]*service.Account)
+	upstreamServedSession := false
+	defer func() {
+		if upstreamServedSession {
+			return
+		}
+		for _, acc := range sessionSlotAccounts {
+			h.gatewayService.ReleaseAccountSession(context.Background(), acc, sessionKey)
+		}
+	}()
+
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
 	if h.gatewayService.IsSingleAntigravityAccountGroup(c.Request.Context(), currentAPIKey.GroupID) {
@@ -670,6 +682,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 			account := selection.Account
 			setOpsSelectedAccount(c, account.ID, account.Platform)
+			if sessionKey != "" {
+				sessionSlotAccounts[account.ID] = account
+			}
 
 			// [DEBUG-STICKY] 打印账号选择结果
 			reqLog.Info("sticky.account_selected",
@@ -962,6 +977,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						currentSubscription = fallbackSubscription
 						fallbackUsed = true
 						retryWithFallback = true
+						for _, acc := range sessionSlotAccounts {
+							h.gatewayService.ReleaseAccountSession(context.Background(), acc, sessionKey)
+						}
+						sessionSlotAccounts = make(map[int64]*service.Account)
 						break
 					}
 					_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
@@ -978,6 +997,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					switch action {
 					case FailoverContinue:
 						h.gatewayService.RecordAdvancedAccountSwitch(selection)
+						h.gatewayService.ReleaseAccountSession(context.Background(), account, sessionKey)
+						delete(sessionSlotAccounts, account.ID)
 						continue
 					case FailoverExhausted:
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, account.Platform, streamStarted)
@@ -1012,7 +1033,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				reqLog.Error("gateway.forward_failed", forwardFailedFields...)
 				// 流式响应已中断时，仍需提交 Forward 在中断前观测到的 usage。
-				submitForwardUsage(result)
+				if result != nil {
+					submitForwardUsage(result)
+					upstreamServedSession = true
+				} else {
+					submitForwardUsage(result)
+				}
 				return
 			}
 
@@ -2311,6 +2337,7 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		var failoverErr *service.UpstreamFailoverError
 		if !errors.As(forwardErr, &failoverErr) {
 			reqLog.Error("gateway.count_tokens_forward_failed", zap.Int64("account_id", account.ID), zap.Error(forwardErr))
+			h.gatewayService.ReleaseAccountSession(context.Background(), account, sessionHash)
 			return
 		}
 		action := fs.HandleFailoverError(
@@ -2318,11 +2345,14 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		)
 		switch action {
 		case FailoverContinue:
+			h.gatewayService.ReleaseAccountSession(context.Background(), account, sessionHash)
 			continue
 		case FailoverCanceled:
+			h.gatewayService.ReleaseAccountSession(context.Background(), account, sessionHash)
 			failoverClientGone(c)
 			return
 		default:
+			h.gatewayService.ReleaseAccountSession(context.Background(), account, sessionHash)
 			h.handleFailoverExhausted(c, fs.LastFailoverErr, account.Platform, false)
 			return
 		}
