@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -400,9 +402,12 @@ func TestEstimateOpenAIInputTokens_CompareWithOpenAIAPI(t *testing.T) {
 
 			actual, err := callOpenAIInputTokensAPIForTest(client, apiKey, prepared.Request)
 			if err != nil {
-				// 此处仅用于实时 API 对比，本地密钥无效或过期时应跳过而非使 CI 失败。
-				if strings.Contains(err.Error(), "status=401") || strings.Contains(err.Error(), "invalid_api_key") {
-					t.Skipf("OPENAI_API_KEY rejected by OpenAI: %v", err)
+				// 此处仅用于实时 API 对比，凭据或临时网络错误时应跳过而非使确定性测试失败。
+				var netErr net.Error
+				if strings.Contains(err.Error(), "status=401") ||
+					strings.Contains(err.Error(), "invalid_api_key") ||
+					errors.As(err, &netErr) {
+					t.Skipf("OpenAI live comparison unavailable: %v", err)
 				}
 				require.NoError(t, err)
 			}
