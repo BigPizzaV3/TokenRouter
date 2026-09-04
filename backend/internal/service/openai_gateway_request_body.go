@@ -1446,12 +1446,12 @@ func normalizeOpenAIServiceTier(raw string) *string {
 	if value == "fast" {
 		value = "priority"
 	}
-	// 放过 OpenAI 官方文档定义的所有合法 tier 值：priority/flex/auto/default/scale。
-	// 对 Codex 客户端零影响（Codex 只发 priority 或 flex，见 codex-rs/core/src/client.rs），
-	// 但能让直连 OpenAI SDK 的用户透传 auto/default/scale 以便抓包/调试。
-	// 真未知值仍返回 nil，由 normalizeResponsesBodyServiceTier 从 body 中删除。
+	// 放过 OpenAI 官方文档定义的合法 tier 值，以及 Codex/API 新增的 ultrafast。
+	// Codex 客户端会发 priority、flex 或 ultrafast；直连 OpenAI SDK 的用户还会
+	// 透传 auto/default/scale。真未知值仍返回 nil，由
+	// normalizeResponsesBodyServiceTier 从 body 中删除。
 	switch value {
-	case "priority", "flex", "auto", "default", "scale":
+	case "priority", "flex", "auto", "default", "scale", OpenAIFastTierUltrafast:
 		return &value
 	default:
 		return nil
@@ -1466,7 +1466,7 @@ type ErrInvalidOpenAIServiceTier struct {
 }
 
 func (e *ErrInvalidOpenAIServiceTier) Error() string {
-	return fmt.Sprintf("invalid service_tier %q: must be one of auto, default, fast, flex, priority, scale", e.Value)
+	return fmt.Sprintf("invalid service_tier %q: must be one of auto, default, fast, flex, priority, scale, ultrafast", e.Value)
 }
 
 const invalidOpenAIServiceTierValueMaxLen = 64
@@ -1481,7 +1481,7 @@ func boundInvalidOpenAIServiceTierValue(raw string) string {
 // ValidateOpenAIServiceTierField 校验 OpenAI 兼容请求体中的 service_tier 字段。
 //
 // 空值或 null 保持兼容；fast 归一化为 priority；priority、flex、auto、default、
-// scale 原样通过。显式的非字符串、空字符串或未知值返回校验错误。
+// scale、ultrafast 原样通过。显式的非字符串、空字符串或未知值返回校验错误。
 func ValidateOpenAIServiceTierField(body []byte) (string, error) {
 	tierResult := gjson.GetBytes(body, "service_tier")
 	if !tierResult.Exists() || tierResult.Type == gjson.Null {
