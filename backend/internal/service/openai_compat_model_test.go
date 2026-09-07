@@ -521,7 +521,7 @@ func TestForwardAsAnthropic_GPT6AstraPromptCacheIdentityStableAcrossAppendedTurn
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
 
-	for _, mappedModel := range []string{"gpt-6-astra", "gpt-6"} {
+	for _, mappedModel := range []string{"gpt-6-astra"} {
 		mappedModel := mappedModel
 		t.Run(mappedModel, func(t *testing.T) {
 			t.Parallel()

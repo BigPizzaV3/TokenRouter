@@ -28,9 +28,7 @@ func TestShouldAutoInjectPromptCacheKeyForCompat(t *testing.T) {
 
 func TestShouldAutoInjectPromptCacheKeyForCompat_GPT6AstraForms(t *testing.T) {
 	for _, model := range []string{
-		"gpt-6",
 		"gpt-6-astra",
-		"openai/gpt-6",
 		"openai/gpt-6-astra",
 		"OPENAI/GPT-6_ASTRA",
 		"provider/gpt-6-astra",
