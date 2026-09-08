@@ -50,7 +50,12 @@ Anthropic 请求策略包括：
 - prompt caching、cache TTL 注入和消息缓存重写；缓存读写 token 进入用量与定价，而不是仅作为诊断字段。
 - 可选 web search emulation、Claude Code 客户端约束、metadata/header 策略和长上下文计价。
 
+<a id="claude_billing_fingerprint"></a>
+### Claude 请求指纹
+
 Claude Code-only 约束会在 CLI UA 之后校验必需 Header、metadata 与官方 system 特征。OAuth 账号级客户端指纹只接受稳定的 `<product>/<major>.<minor>.<patch>` User-Agent，拒绝本地构建后缀、超长值和远超当前内置版本的 Claude CLI 哨兵主版本；首次创建与版本升级共用该校验，历史非法缓存会在读取时用合法客户端 UA 或默认指纹自愈，并保留原 `ClientID`。Auto mode 安全分类请求可在监视器提示词前后携带独立会话上下文块；校验器会遍历所有文本 system 块查找同时满足固定前缀、长度下限和全部结构标记的提示词，不会因附加上下文误拒，也不会仅凭上下文块放行。
+
+Messages 和 CountTokens 的 OAuth 出站请求中，`x-anthropic-billing-header` 的 `cc_version` 必须匹配最终 User-Agent。启用 Claude Code 伪装时使用运行时 CLI 默认头（包括合法的 CLI 版本环境覆盖），即使没有账号指纹服务或指纹统一被关闭也要同步；普通指纹转发使用账号缓存 UA。三位十六进制指纹后缀包含版本和用户消息信息，版本同步时必须重算，并保持重复处理幂等、用户消息不变；该步骤在最终出站请求体构造前完成。
 
 具体启用条件可能来自全局运行设置、分组/渠道和账号 extra。层级边界见[网关策略控制](../domains/gateway_policy_controls.md)。
 
