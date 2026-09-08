@@ -1160,7 +1160,8 @@ func TestHTTPUpstreamPublicHostsOnlyValidatesEveryRedirectHop(t *testing.T) {
 
 // 公网下载约束与已有的重定向策略必须同时生效，且不能污染缓存客户端。
 func TestHTTPUpstreamPublicHostsOnlyPreservesExistingRedirectPolicy(t *testing.T) {
-	upstream := NewHTTPUpstream(nil).(*httpUpstreamService)
+	upstream, ok := NewHTTPUpstream(nil).(*httpUpstreamService)
+	require.True(t, ok)
 	called := false
 	base := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
 		called = true
