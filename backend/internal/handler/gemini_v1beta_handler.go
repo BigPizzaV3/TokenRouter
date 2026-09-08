@@ -31,8 +31,8 @@ import (
 // 匹配格式: /Users/xxx/.gemini/tmp/[64位十六进制哈希]
 var geminiCLITmpDirRegex = regexp.MustCompile(`/\.gemini/tmp/([A-Fa-f0-9]{64})`)
 
-// GeminiV1BetaListModels proxies:
-// GET /v1beta/models
+// GeminiV1BetaListModels 返回 Gemini 原生模型列表及当前 Key 可用的精确别名。
+// @project-doc docs/domains/api_key_model_redirects.md#model_list_projection
 func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 	apiKey, ok := middleware.GetAPIKeyFromContext(c)
 	if !ok || apiKey == nil {
@@ -70,7 +70,7 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 	}
 
 	if models, ok := customGeminiModelsList(apiKey.Group); ok {
-		c.JSON(http.StatusOK, models)
+		writeGeminiModelsListWithAPIKeyAliases(c, models, apiKey)
 		return
 	}
 

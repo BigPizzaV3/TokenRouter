@@ -87,6 +87,7 @@ API Key 查询与列表响应会返回完整的 `model_mapping` 对象。
 
 例如客户端请求 `GPT/codex-auto-review`，规则为 `codex-auto-review -> gpt-5.6-luna`，则选中 `GPT` 分组后向内部传递 `gpt-5.6-luna`，客户端响应仍展示 `GPT/codex-auto-review`。
 
+<a id="model_list_projection"></a>
 ## 模型列表
 
 `/v1/models`、`/models`、Gemini、Antigravity 与批量图片模型列表保留原有模型，并追加目标当前可请求的精确别名。
@@ -95,6 +96,7 @@ API Key 查询与列表响应会返回完整的 `model_mapping` 对象。
 - 目标当前不可请求时不展示别名。
 - 通配符来源不会被枚举为具体模型 ID。
 - 复合 Key 返回带分组前缀的别名。
+- Gemini 原生 `/v1beta/models` 开启分组自定义列表时，也以返回列表中的目标模型追加 Key 精确别名；别名继承目标能力元数据，原模型与顺序保留。
 
 保存规则时只校验格式，不要求目标当时已有可用渠道或账号；实际请求继续使用现有路由错误语义。
 
