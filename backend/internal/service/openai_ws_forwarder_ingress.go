@@ -1156,17 +1156,8 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if openAIWSEventShouldParseUsage(eventType) {
 				parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
 			}
-			if eventType == "response.failed" {
-				if hit, code, msg := detectOpenAICyberPolicy(upstreamMessage); hit {
-					MarkOpsCyberPolicy(c, CyberPolicyMark{
-						Code:           code,
-						Message:        msg,
-						Body:           truncateString(string(upstreamMessage), 4096),
-						UpstreamStatus: http.StatusOK,
-						UpstreamInTok:  usage.InputTokens,
-						UpstreamOutTok: usage.OutputTokens,
-					})
-				}
+			if eventType == "error" || eventType == "response.failed" {
+				markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
 			}
 			imageCounter.AddSSEData(upstreamMessage)
 			terminalPolicy := openAIWSTerminalPolicyDecision{
