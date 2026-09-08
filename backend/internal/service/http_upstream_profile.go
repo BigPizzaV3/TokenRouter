@@ -13,6 +13,7 @@ const (
 
 type httpUpstreamProfileContextKey struct{}
 type httpUpstreamDisableRedirectsContextKey struct{}
+type httpUpstreamPublicHostsOnlyContextKey struct{}
 
 // WithHTTPUpstreamProfile 将上游传输 profile 写入 context。
 func WithHTTPUpstreamProfile(ctx context.Context, profile HTTPUpstreamProfile) context.Context {
@@ -52,4 +53,17 @@ func WithHTTPUpstreamRedirectsDisabled(ctx context.Context) context.Context {
 
 func HTTPUpstreamRedirectsDisabled(ctx context.Context) bool {
 	return ctx != nil && ctx.Value(httpUpstreamDisableRedirectsContextKey{}) == true
+}
+
+// WithHTTPUpstreamPublicHostsOnly 标记来自不可信响应 URL 的下载请求。
+// 共享上游客户端会对初始地址和每个重定向目标执行公网地址校验。
+func WithHTTPUpstreamPublicHostsOnly(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, httpUpstreamPublicHostsOnlyContextKey{}, true)
+}
+
+func HTTPUpstreamPublicHostsOnly(ctx context.Context) bool {
+	return ctx != nil && ctx.Value(httpUpstreamPublicHostsOnlyContextKey{}) == true
 }

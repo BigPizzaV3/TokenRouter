@@ -38,6 +38,11 @@ OpenAI 平台拥有以下正式协议族：
 | Images | OpenAI 图片生成/编辑；当前网关保留同步生命周期，批量图片由 Gemini/Vertex 专题定义 |
 | Realtime/Live/sideband、Alpha Search | 仅 OpenAI 分组，并受分组开关、账号类型和 transport capability 限制 |
 
+<a id="images_url_backfill"></a>
+### 图片结果回填
+
+OpenAI API Key 账号可通过 `extra.images_url_to_b64_json=true` 启用图片回填，默认关闭。非流式 `/images/generations` 与 `/images/edits` 响应中，只有缺少非空 `b64_json` 且含 URL 的图片项会被补全；已有 Base64、显式 `response_format=url` 和流式请求保持原行为。回填保留原 URL、修订提示词和所有上游元数据，下载失败只跳过该项；用量、图片数量和计费尺寸始终从回填前的上游响应读取。下载复用账号代理，不携带账号认证或客户端 Cookie；每张最多 20 MiB、60 秒，只接受字节嗅探确认的 PNG/JPEG/WebP/GIF，data URI 也执行内容与大小检查。目标检查见[上游传输安全](../operations/upstream_transport_security.md)。
+
 ### 创作台 Images 契约
 
 创作台异步执行器的 `generate` 使用 `/v1/images/generations` JSON，`edit`/`inpaint` 使用 `/v1/images/edits` multipart；固定发送 PNG、单张 `n=1`，并按最终模型能力透传尺寸、质量和背景。GPT Image 模型不发送 `response_format`（其响应固定包含 base64），只有 DALL-E 模型保留 `response_format=b64_json`。inpaint 的 mask 必须是与源图同尺寸、4 MiB 以内的 PNG，透明像素表示需要重绘区域。

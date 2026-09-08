@@ -43,7 +43,7 @@ TLS collector 可采集受控会话以建立或检查 profile。采集入口是�
 
 自定义 base URL 在转发和账号测试等使用入口至少经过格式与 scheme 校验。启用 `security.url_allowlist` 后，入口还要求目标命中对应 host allowlist，并按 `allow_private_hosts` 决定是否允许本地或私网字面量地址；关闭 allowlist 时只保留最小格式校验，HTTP 还必须由 `allow_insecure_http` 显式放行，启动日志会提示 SSRF 检查已关闭。
 
-只有在 allowlist 已启用且 `allow_private_hosts=false` 时，上游 HTTP client 才会在发起请求前解析目标 host，并对后续重定向重新执行解析后 IP 校验。允许私网或关闭 allowlist 都会跳过这层检查，因此不能把该配置状态描述成无条件的 DNS rebinding 防护。
+常规上游请求仅在 allowlist 已启用且 `allow_private_hosts=false` 时，由 HTTP client 在发起请求前解析目标 host，并对后续重定向重新执行解析后 IP 校验。Images URL 回填下载额外携带请求级公网限制：不论全局是否允许私网，都拒绝本地/私网字面量及解析结果，并在每次重定向上执行相同检查，同时保留共享客户端原有的重定向限制。普通请求不会继承此下载标记。当前校验与实际连接仍是分开的解析步骤，代理也可能自行解析，因此不能把它描述为绑定实际连接 IP 的完整 DNS rebinding 防护。
 
 平台默认端点、管理员允许的兼容上游和对象/媒体下载可能使用不同 allowlist，但都不能直接信任上游返回的任意 URL。默认上游 host 包含 Kimi/Moonshot、Zhipu/Z.ai 和 DeepSeek 官方域名；CN 周期监控只对这些官方 host 直接运行，自定义中继即使可用于手动请求，也必须在 allowlist 已启用且显式命中时才能被后台周期访问。Grok 视频 content 等下载通过服务端凭据代理时仍需验证任务归属和最终目标。
 
