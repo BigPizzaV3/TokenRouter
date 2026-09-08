@@ -170,6 +170,16 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 	body = parsedReq.Body.Bytes()
 	reqModel := parsedReq.Model
+	if policyBody, changed, policyErr := applyAnthropicReasoningEffortPolicyForRequest(c, apiKey, body); policyErr != nil {
+		respondOpenAIReasoningEffortPolicyError(c, policyErr, h.errorResponse)
+		return
+	} else if changed {
+		if err := parsedReq.ReplaceBody(policyBody); err != nil {
+			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to apply reasoning effort policy")
+			return
+		}
+		body = parsedReq.Body.Bytes()
+	}
 	reqStream := parsedReq.Stream
 	bindRequestedReasoningEffort(c, body, reqModel)
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))

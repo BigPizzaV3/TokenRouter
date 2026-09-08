@@ -753,7 +753,7 @@
             </div>
             <ReasoningEffortPolicyFields
               data-group-field="reasoning"
-              v-if="createForm.platform === 'openai'"
+              v-if="createForm.platform === 'openai' || createForm.platform === 'anthropic'"
               ref="createReasoningEffortPolicyRef"
               id-prefix="create-group-reasoning"
               :platform="createForm.platform"
@@ -2437,7 +2437,7 @@
             </div>
             <ReasoningEffortPolicyFields
               data-group-field="reasoning"
-              v-if="editForm.platform === 'openai'"
+              v-if="editForm.platform === 'openai' || editForm.platform === 'anthropic'"
               ref="editReasoningEffortPolicyRef"
               id-prefix="edit-group-reasoning"
               :platform="editForm.platform"
@@ -5559,7 +5559,7 @@ const validateGroupForm = async (target: "create" | "edit"): Promise<boolean> =>
     await tabs?.revealField('[data-group-field="name"]');
     return false;
   }
-  if (form.platform === "openai" && reasoning && !reasoning.validate()) {
+  if ((form.platform === "openai" || form.platform === "anthropic") && reasoning && !reasoning.validate()) {
     await nextTick();
     await tabs?.revealField('[data-group-field="reasoning"] [role="alert"]');
     return false;

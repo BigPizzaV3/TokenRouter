@@ -769,12 +769,13 @@ func checkBillingModeRequirements(p ChannelModelPricing) error {
 	}{
 		{"fast_multiplier", p.FastMultiplier},
 		{"flex_multiplier", p.FlexMultiplier},
+		{"max_reasoning_effort_multiplier", p.MaxReasoningEffortMultiplier},
 	} {
 		if c.val != nil && *c.val <= 0 {
 			return infraerrors.BadRequest("INVALID_MULTIPLIER", fmt.Sprintf("%s must be > 0", c.field))
 		}
 	}
-	if p.FastMultiplier != nil || p.FlexMultiplier != nil {
+	if p.FastMultiplier != nil || p.FlexMultiplier != nil || p.MaxReasoningEffortMultiplier != nil {
 		mode := p.BillingMode
 		if mode == "" {
 			mode = BillingModeToken
@@ -782,7 +783,7 @@ func checkBillingModeRequirements(p ChannelModelPricing) error {
 		if mode != BillingModeToken {
 			return infraerrors.BadRequest(
 				"TIER_MULTIPLIER_UNSUPPORTED_BILLING_MODE",
-				"fast_multiplier and flex_multiplier are only supported for token billing mode",
+				"fast_multiplier, flex_multiplier and max_reasoning_effort_multiplier are only supported for token billing mode",
 			)
 		}
 	}
@@ -856,6 +857,12 @@ func validateAccountStatsPricingEntries(pricing []ChannelModelPricing) error {
 			return infraerrors.BadRequest(
 				"ACCOUNT_STATS_TIER_MULTIPLIER_UNSUPPORTED",
 				"service tier multipliers are not supported for account stats pricing",
+			)
+		}
+		if p.MaxReasoningEffortMultiplier != nil {
+			return infraerrors.BadRequest(
+				"ACCOUNT_STATS_REASONING_MULTIPLIER_UNSUPPORTED",
+				"max_reasoning_effort_multiplier is not supported for account stats pricing",
 			)
 		}
 		if p.TimePricing != nil && len(p.TimePricing.Periods) > 0 {

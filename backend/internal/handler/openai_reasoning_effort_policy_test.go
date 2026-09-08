@@ -45,3 +45,22 @@ func TestApplyOpenAIReasoningEffortPolicyForRequest_MapsConfiguredNoneForAstra(t
 	require.NotNil(t, result.RequestedReasoningEffort)
 	require.Equal(t, "none", *result.RequestedReasoningEffort)
 }
+
+func TestApplyAnthropicReasoningEffortPolicyForRequest_CapsOutputConfigEffort(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	apiKey := &service.APIKey{Group: &service.Group{
+		Platform:           service.PlatformAnthropic,
+		MaxReasoningEffort: "high",
+	}}
+	body := []byte(`{"model":"claude-fable-5-1","output_config":{"effort":"max"}}`)
+	updated, changed, err := applyAnthropicReasoningEffortPolicyForRequest(c, apiKey, body)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, "high", gjson.GetBytes(updated, "output_config.effort").String())
+	requested := service.RequestedReasoningEffortFromContext(c.Request.Context())
+	require.NotNil(t, requested)
+	require.Equal(t, "max", *requested)
+}

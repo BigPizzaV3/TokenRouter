@@ -339,6 +339,7 @@ func (r *ModelPricingResolver) applyTokenOverrides(chPricing *ChannelModelPricin
 			resolved.BasePricing.SupportsCacheBreakdown = true
 		}
 		applyChannelImageInputPrice(chPricing, resolved.BasePricing)
+		resolved.BasePricing.MaxReasoningEffortMultiplier = chPricing.MaxReasoningEffortMultiplier
 		return
 	}
 
@@ -365,6 +366,7 @@ func (r *ModelPricingResolver) applyTokenOverrides(chPricing *ChannelModelPricin
 	}
 	resolved.BasePricing.ImageOutputPriceExplicit = true
 	applyChannelImageInputPrice(chPricing, resolved.BasePricing)
+	resolved.BasePricing.MaxReasoningEffortMultiplier = chPricing.MaxReasoningEffortMultiplier
 }
 
 // applyChannelImageInputPrice 应用渠道图片输入价：显式配置则用配置值；

@@ -33,8 +33,9 @@ func resolveAccountStatsCost(
 	requestCount int,
 	totalCost float64,
 	serviceTier string,
+	reasoningEfforts ...string,
 ) *float64 {
-	return resolveAccountStatsCostWithMapped(ctx, channelService, billingService, accountID, groupID, upstreamModel, requestedModel, "", tokens, requestCount, totalCost, serviceTier)
+	return resolveAccountStatsCostWithMapped(ctx, channelService, billingService, accountID, groupID, upstreamModel, requestedModel, "", tokens, requestCount, totalCost, serviceTier, reasoningEfforts...)
 }
 
 func resolveAccountStatsCostWithMapped(
@@ -50,7 +51,12 @@ func resolveAccountStatsCostWithMapped(
 	requestCount int,
 	totalCost float64,
 	serviceTier string,
+	reasoningEfforts ...string,
 ) *float64 {
+	reasoningEffort := ""
+	if len(reasoningEfforts) > 0 {
+		reasoningEffort = reasoningEfforts[0]
+	}
 	if channelService == nil || upstreamModel == "" {
 		return nil
 	}
@@ -63,7 +69,7 @@ func resolveAccountStatsCostWithMapped(
 
 	// 优先级 1：自定义规则（始终尝试）
 	for _, customRuleModel := range accountStatsCustomRuleModels(platform, upstreamModel, requestedModel, channelMappedModel) {
-		if cost := tryCustomRules(channel, accountID, groupID, platform, customRuleModel, tokens, requestCount); cost != nil {
+		if cost := tryCustomRules(channel, accountID, groupID, platform, customRuleModel, tokens, requestCount, reasoningEffort); cost != nil {
 			return cost
 		}
 	}
@@ -87,13 +93,13 @@ func resolveAccountStatsCostWithMapped(
 				if qoderAliasRequiresManualPricingAny(model) {
 					continue
 				}
-				if cost := tryModelFilePricing(billingService, model, tokens, serviceTier); cost != nil {
+				if cost := tryModelFilePricing(billingService, model, tokens, serviceTier, reasoningEffort); cost != nil {
 					return cost
 				}
 			}
 			return nil
 		}
-		return tryModelFilePricing(billingService, upstreamModel, tokens, serviceTier)
+		return tryModelFilePricing(billingService, upstreamModel, tokens, serviceTier, reasoningEffort)
 	}
 
 	return nil
@@ -161,12 +167,15 @@ func uniqueNonEmptyAccountStatsModels(models []string) []string {
 // 与用户计费共用同一条定价管线，避免这里维护第二份"单价 × token 数"实现后，
 // 每加一个定价特性都要手工镜像一次。channelPricing 为 nil，保持优先级 3 的
 // 语义：只取模型定价文件，不引入渠道自定义定价。
-func tryModelFilePricing(billingService *BillingService, model string, tokens UsageTokens, serviceTier string) *float64 {
+func tryModelFilePricing(billingService *BillingService, model string, tokens UsageTokens, serviceTier string, reasoningEfforts ...string) *float64 {
 	breakdown, err := billingService.CalculateCostWithServiceTier(
 		model, tokens, 1, normalizeBillingServiceTier(serviceTier),
 	)
 	if err != nil || breakdown == nil || breakdown.TotalCost <= 0 {
 		return nil
+	}
+	if len(reasoningEfforts) > 0 {
+		applyCostBreakdownMultiplier(breakdown, maxReasoningEffortBillingMultiplier(model, reasoningEfforts[0], nil))
 	}
 	return &breakdown.TotalCost
 }
@@ -175,6 +184,7 @@ func tryModelFilePricing(billingService *BillingService, model string, tokens Us
 func tryCustomRules(
 	channel *Channel, accountID, groupID int64,
 	platform, model string, tokens UsageTokens, requestCount int,
+	reasoningEfforts ...string,
 ) *float64 {
 	modelLower := strings.ToLower(model)
 	for _, rule := range channel.AccountStatsPricingRules {
@@ -185,7 +195,10 @@ func tryCustomRules(
 		if pricing == nil {
 			continue // 规则匹配但模型不在规则定价中，继续下一条
 		}
-		if cost := calculateStatsCost(pricing, tokens, requestCount); cost != nil {
+		if cost := calculateStatsCost(pricing, tokens, requestCount, reasoningEfforts...); cost != nil {
+			if len(reasoningEfforts) > 0 && pricing.MaxReasoningEffortMultiplier == nil {
+				*cost *= maxReasoningEffortBillingMultiplier(model, reasoningEfforts[0], nil)
+			}
 			return cost
 		}
 	}
@@ -273,7 +286,7 @@ func isPlatformMatch(queryPlatform, pricingPlatform string) bool {
 }
 
 // calculateStatsCost 使用给定的定价计算费用，并在最后应用可选的定价倍率。
-func calculateStatsCost(pricing *ChannelModelPricing, tokens UsageTokens, requestCount int) *float64 {
+func calculateStatsCost(pricing *ChannelModelPricing, tokens UsageTokens, requestCount int, reasoningEfforts ...string) *float64 {
 	if pricing == nil {
 		return nil
 	}
@@ -290,7 +303,14 @@ func calculateStatsCost(pricing *ChannelModelPricing, tokens UsageTokens, reques
 	// 账号统计规则与实际渠道计费共用同一倍率语义。
 	if multiplier, configured := normalizedPriceMultiplier(pricing); configured {
 		scaled := *cost * multiplier
-		return &scaled
+		cost = &scaled
+	}
+	if len(reasoningEfforts) > 0 {
+		multiplier := maxReasoningEffortBillingMultiplier("", reasoningEfforts[0], &ModelPricing{MaxReasoningEffortMultiplier: pricing.MaxReasoningEffortMultiplier})
+		if multiplier != 1 {
+			scaled := *cost * multiplier
+			cost = &scaled
+		}
 	}
 	return cost
 }
@@ -394,10 +414,15 @@ func applyAccountStatsCost(
 		requestCount = usageLog.ImageCount
 	}
 	serviceTier := ""
+	reasoningEffort := ""
 	if usageLog != nil && usageLog.ServiceTier != nil {
 		serviceTier = *usageLog.ServiceTier
 	}
+	if usageLog != nil && usageLog.ReasoningEffort != nil {
+		reasoningEffort = *usageLog.ReasoningEffort
+	}
 	usageLog.AccountStatsCost = resolveAccountStatsCostWithMapped(
 		ctx, cs, bs, accountID, groupID, model, requestedModel, channelMappedModel, tokens, requestCount, totalCost, serviceTier,
+		reasoningEffort,
 	)
 }
