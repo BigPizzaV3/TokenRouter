@@ -1044,6 +1044,14 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				}
 				lastEventType = eventType
 			}
+			// 先保存用量和风控证据，确保错误早退后 AfterTurn 仍可完成风控收尾。
+			// @project-doc docs/domains/content_moderation.md#upstream_cyber_policy
+			if openAIWSEventShouldParseUsage(eventType) {
+				parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
+			}
+			if eventType == "error" || eventType == "response.failed" {
+				markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
+			}
 			if eventType == "error" {
 				canonicalModel := canonicalOpenAIAccountSchedulingModel(account, routingModel)
 				errorDecision := s.handleOpenAIWSErrorEventTransientFailure(ctx, account, canonicalModel, lease.HandshakeHeaders(), upstreamMessage)
@@ -1152,12 +1160,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if firstTokenMs == nil && isTokenEvent {
 				ms := int(time.Since(turnStart).Milliseconds())
 				firstTokenMs = &ms
-			}
-			if openAIWSEventShouldParseUsage(eventType) {
-				parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
-			}
-			if eventType == "error" || eventType == "response.failed" {
-				markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
 			}
 			imageCounter.AddSSEData(upstreamMessage)
 			terminalPolicy := openAIWSTerminalPolicyDecision{

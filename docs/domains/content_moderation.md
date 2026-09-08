@@ -41,6 +41,13 @@
 
 风险处置必须带实际用户、API Key、Group、模型、request ID、命中类别和来源规则。自动封禁失败要告警，不能把数据库更新失败当作已经阻断后续请求。管理员可查看汇总、日志、媒体、warning、API Key 测试和 unban 操作，所有敏感读取仍受管理员认证和审计约束。
 
+<a id="upstream_cyber_policy"></a>
+### 上游 Cyber Policy
+
+OpenAI WebSocket 的 `error` 和 `response.failed` 都可能携带明确的 `cyber_policy` 错误码。服务层必须先解析事件用量并保存风控证据，再进入可能重试、故障转移或提前返回的错误分支；`rate_limit_error` 与 `cyber_policy` 同时出现时也不能漏记。
+
+WS handler 的 `AfterTurn` 依赖该标记执行现有风控、用量与会话阻断流程；消费后按轮清理，避免后续轮次复用旧命中。事件响应体保留现有截断边界，软警告与硬阻断继续使用各自的处置规则。
+
 ## 记录与安全边界
 
 审核记录可能包含命中文本或媒体引用，留存策略区分命中与未命中。普通 Ops/system log 只记录必要元数据、摘要和错误，不写完整 prompt、图片、审核密钥或上游原始响应。管理端展示和删除 hash/媒体时必须保持授权范围。
