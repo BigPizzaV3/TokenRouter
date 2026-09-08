@@ -606,6 +606,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	fallbackUsed := false
 
 	// 记录本次请求注册过会话槽的账号；最终失败时立即释放，避免失败请求占满空闲窗口。
+	// @project-doc docs/architecture/account_scheduling_and_cache.md#session_lifecycle
 	sessionSlotAccounts := make(map[int64]*service.Account)
 	upstreamServedSession := false
 	defer func() {
@@ -1072,6 +1073,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 
 			submitForwardUsage(result)
+			// 转发成功后保留活跃会话，继续按最后活动时间和空闲窗口过期。
+			upstreamServedSession = true
 			return
 		}
 		if !retryWithFallback {
