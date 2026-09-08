@@ -46,7 +46,7 @@ Responses 请求转换为 Anthropic Messages 时，只发送 Anthropic 入站协
 Anthropic 请求策略包括：
 
 - beta header 过滤、补充或阻断，避免把账号不允许的实验能力直接发往上游。
-- thinking、tool use、图片和长上下文的协议保真；不同入站协议的推理字段先归一化。
+- thinking、tool use、图片和长上下文的协议保真；三个入口对显式推理档位执行分组映射、上限或拒绝。`xhigh` 与 `max` 在协议转换后仍保持独立，原始和实际转发档位分别记入用量；计价口径见[路由与结算](../domains/routing_and_billing.md)。
 - prompt caching、cache TTL 注入和消息缓存重写；缓存读写 token 进入用量与定价，而不是仅作为诊断字段。
 - 可选 web search emulation、Claude Code 客户端约束、metadata/header 策略和长上下文计价。
 

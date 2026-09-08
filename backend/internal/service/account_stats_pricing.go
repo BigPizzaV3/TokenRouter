@@ -69,7 +69,7 @@ func resolveAccountStatsCostWithMapped(
 
 	// 优先级 1：自定义规则（始终尝试）
 	for _, customRuleModel := range accountStatsCustomRuleModels(platform, upstreamModel, requestedModel, channelMappedModel) {
-		if cost := tryCustomRules(channel, accountID, groupID, platform, customRuleModel, tokens, requestCount, reasoningEffort); cost != nil {
+		if cost := tryCustomRules(channel, accountID, groupID, platform, customRuleModel, tokens, requestCount); cost != nil {
 			return cost
 		}
 	}
@@ -168,14 +168,16 @@ func uniqueNonEmptyAccountStatsModels(models []string) []string {
 // 每加一个定价特性都要手工镜像一次。channelPricing 为 nil，保持优先级 3 的
 // 语义：只取模型定价文件，不引入渠道自定义定价。
 func tryModelFilePricing(billingService *BillingService, model string, tokens UsageTokens, serviceTier string, reasoningEfforts ...string) *float64 {
-	breakdown, err := billingService.CalculateCostWithServiceTier(
-		model, tokens, 1, normalizeBillingServiceTier(serviceTier),
-	)
+	reasoningEffort := ""
+	if len(reasoningEfforts) > 0 {
+		reasoningEffort = reasoningEfforts[0]
+	}
+	breakdown, err := billingService.CalculateCostUnified(CostInput{
+		Model: model, Tokens: tokens, RateMultiplier: 1,
+		ServiceTier: normalizeBillingServiceTier(serviceTier), ReasoningEffort: reasoningEffort,
+	})
 	if err != nil || breakdown == nil || breakdown.TotalCost <= 0 {
 		return nil
-	}
-	if len(reasoningEfforts) > 0 {
-		applyCostBreakdownMultiplier(breakdown, maxReasoningEffortBillingMultiplier(model, reasoningEfforts[0], nil))
 	}
 	return &breakdown.TotalCost
 }
@@ -184,7 +186,6 @@ func tryModelFilePricing(billingService *BillingService, model string, tokens Us
 func tryCustomRules(
 	channel *Channel, accountID, groupID int64,
 	platform, model string, tokens UsageTokens, requestCount int,
-	reasoningEfforts ...string,
 ) *float64 {
 	modelLower := strings.ToLower(model)
 	for _, rule := range channel.AccountStatsPricingRules {
@@ -195,10 +196,8 @@ func tryCustomRules(
 		if pricing == nil {
 			continue // 规则匹配但模型不在规则定价中，继续下一条
 		}
-		if cost := calculateStatsCost(pricing, tokens, requestCount, reasoningEfforts...); cost != nil {
-			if len(reasoningEfforts) > 0 && pricing.MaxReasoningEffortMultiplier == nil {
-				*cost *= maxReasoningEffortBillingMultiplier(model, reasoningEfforts[0], nil)
-			}
+		// 自定义统计价是独立的最终成本基数，不继承用户侧的模型/推理倍率。
+		if cost := calculateStatsCost(pricing, tokens, requestCount); cost != nil {
 			return cost
 		}
 	}
@@ -286,7 +285,7 @@ func isPlatformMatch(queryPlatform, pricingPlatform string) bool {
 }
 
 // calculateStatsCost 使用给定的定价计算费用，并在最后应用可选的定价倍率。
-func calculateStatsCost(pricing *ChannelModelPricing, tokens UsageTokens, requestCount int, reasoningEfforts ...string) *float64 {
+func calculateStatsCost(pricing *ChannelModelPricing, tokens UsageTokens, requestCount int) *float64 {
 	if pricing == nil {
 		return nil
 	}
@@ -304,13 +303,6 @@ func calculateStatsCost(pricing *ChannelModelPricing, tokens UsageTokens, reques
 	if multiplier, configured := normalizedPriceMultiplier(pricing); configured {
 		scaled := *cost * multiplier
 		cost = &scaled
-	}
-	if len(reasoningEfforts) > 0 {
-		multiplier := maxReasoningEffortBillingMultiplier("", reasoningEfforts[0], &ModelPricing{MaxReasoningEffortMultiplier: pricing.MaxReasoningEffortMultiplier})
-		if multiplier != 1 {
-			scaled := *cost * multiplier
-			cost = &scaled
-		}
 	}
 	return cost
 }

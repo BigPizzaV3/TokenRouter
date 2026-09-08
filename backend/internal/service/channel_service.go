@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -762,6 +763,10 @@ func checkBillingModeRequirements(p ChannelModelPricing) error {
 				"fast_mode_multiplier requires at least one explicit price",
 			)
 		}
+	}
+	// 计费倍率必须有限，防止内部配置写入 NaN/Inf 后污染所有成本桶。
+	if p.MaxReasoningEffortMultiplier != nil && (math.IsNaN(*p.MaxReasoningEffortMultiplier) || math.IsInf(*p.MaxReasoningEffortMultiplier, 0)) {
+		return infraerrors.BadRequest("INVALID_MULTIPLIER", "max_reasoning_effort_multiplier must be finite and > 0")
 	}
 	for _, c := range []struct {
 		field string

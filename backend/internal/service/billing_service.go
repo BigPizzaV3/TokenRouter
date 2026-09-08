@@ -1303,7 +1303,9 @@ func (s *BillingService) GetModelPricingWithChannel(model string, channelPricing
 	}
 	applyChannelFastModeMultiplier(pricing, channelPricing)
 	applyChannelFlexMultiplier(pricing, channelPricing)
-	pricing.MaxReasoningEffortMultiplier = channelPricing.MaxReasoningEffortMultiplier
+	if channelPricing.MaxReasoningEffortMultiplier != nil {
+		pricing.MaxReasoningEffortMultiplier = channelPricing.MaxReasoningEffortMultiplier
+	}
 	return pricing, nil
 }
 

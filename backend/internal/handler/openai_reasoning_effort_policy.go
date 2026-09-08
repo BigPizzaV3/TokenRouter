@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/TokenFlux/TokenRouter/internal/server/middleware"
 	"github.com/TokenFlux/TokenRouter/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -35,6 +36,11 @@ func anthropicReasoningEffortPolicyForRequest(c *gin.Context, apiKey *service.AP
 	// handler 的默认平台推断，否则 Anthropic 分组会被误判为 OpenAI。
 	if apiKey == nil || apiKey.Group == nil || apiKey.Group.Platform != service.PlatformAnthropic {
 		return "", nil, "", false
+	}
+	if c != nil {
+		if platform, forced := middleware.GetForcePlatformFromContext(c); forced && platform != service.PlatformAnthropic {
+			return "", nil, "", false
+		}
 	}
 	return apiKey.Group.MaxReasoningEffort,
 		apiKey.Group.ReasoningEffortMappings,

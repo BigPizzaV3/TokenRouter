@@ -78,7 +78,13 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
-	bindRequestedReasoningEffort(c, body, reqModel)
+	// 在协议转换前裁决客户端显式档位，并保留改写前的审计值。
+	if policyBody, _, policyErr := applyAnthropicReasoningEffortPolicyForRequest(c, apiKey, body); policyErr != nil {
+		respondOpenAIReasoningEffortPolicyError(c, policyErr, h.responsesErrorResponse)
+		return
+	} else {
+		body = policyBody
+	}
 	reqStream, ok := parseOpenAICompatibleStream(body)
 	if !ok {
 		h.responsesErrorResponse(c, http.StatusBadRequest, "invalid_request_error", invalidStreamFieldTypeMessage)

@@ -181,7 +181,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		body = parsedReq.Body.Bytes()
 	}
 	reqStream := parsedReq.Stream
-	bindRequestedReasoningEffort(c, body, reqModel)
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	// 解析渠道级模型映射

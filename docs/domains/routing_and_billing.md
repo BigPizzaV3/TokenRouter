@@ -61,6 +61,8 @@ OpenAI/Composite 分组可启用 `force_openai_fast`，使可信认证快照中�
 
 OpenAI 分组还可设置 `max_reasoning_effort` 与 `max_reasoning_effort_over_limit`。策略只处理客户端显式提供的 `reasoning.effort`、`reasoning_effort` 或 Messages 的 `output_config.effort`；缺省 effort 不会被桥接器补出的默认值误判为客户端请求。先按分组的模型范围映射（精确、前缀或后缀）得到有效档位，再比较 `minimal < low < medium < high < xhigh < max`：`downgrade`（默认）改写为上限，`deny` 返回本地 403 权限错误并标记为业务限制。推理档位改写仅能来自管理员配置的映射或上限策略，普通转发层不得再隐式改写；`none` 可作为映射和请求审计值，但不参与上限排序。Usage Log 同时保留策略前的请求档位与最终转发档位。复合 Key 在鉴权阶段已经选出具体 OpenAI 分组，因此沿用该分组策略；当前 fork 不重新开放 Composite 分组本身的推理配置。HTTP Responses/Chat、Messages 转换和 Responses WebSocket 的每个请求帧都必须执行同一裁决，且策略快照随 API Key 认证缓存传播。
 
+Anthropic 分组也支持同一套模型范围映射、上限与超限动作，合法档位为 `low < medium < high < xhigh < max`，不接受 OpenAI 专用的 `none/minimal` 配置。Messages、Responses、Chat 三个入口都在协议转换和账号调度前执行策略；强制路由到其他平台时不套用 Anthropic 策略。兼容桥保留 `xhigh` 与 `max` 的区别，防止转换过程静默触发不同费率。
+
 ## 可用性与缓存
 
 认证、分组、渠道和账号热路径使用缓存或调度快照降低数据库压力，但数据库配置和实时调度状态仍是权威来源。以下变更必须主动失效对应缓存或发布新快照：Key 状态/限额/映射变化，团队关系变化，分组平台/能力/倍率变化，渠道成员/映射/价格变化，以及账号状态、分组关系、凭据、代理、并发或资格变化。
@@ -98,6 +100,8 @@ Kimi、Zhipu、DeepSeek 账号的计费候选不能把客户端 `claude`、`opus
 计费来源为上游模型时，要在账号选定并完成最终映射后才能确定价格；模型限制与计费必须使用同一解析结果。高峰倍率按请求结算时刻和配置时区计算，只叠加到适用的 token 价格；图片/视频按次的独立倍率遵守各自规则。所有价格和倍率必须拒绝负值，并在配置写入时校验所选模式所需字段。定价模式冲突检测必须复用定价缓存键的归一化：忽略首尾空白，并把 `claude-*` 名称中的点号与连字符视为等价，防止两个配置静默覆盖同一缓存项；模型映射缓存只做小写归一化，不能套用这条定价专用规则而误报冲突。
 
 渠道模型定价可为 token 模式配置 `time_pricing`：使用 IANA 时区和每日重复的左闭右开 `HH:mm`/`HH:mm:ss` 区间，倍率必须有限、至少 `0.01` 且最多两位小数，区间不得重叠；结束时间 `00:00` 表示当天 24:00，跨午夜区间必须拆成两段。该倍率只作用于渠道 token 的输入、图片输入、输出和缓存价格桶，不作用于按次、图片或视频模式，也不复制到分组价卡或账号统计规则。管理员写入时由后端最终校验，存储在 `channel_model_pricing.time_pricing` JSONB；当前 fork 的迁移文件为 `249_channel_model_time_pricing.sql`。普通请求使用结算时刻，OpenAI WebSocket 使用对应 turn 开始时刻；配置损坏或无法加载时安全回退到 `1x`，不改变既有计费。
+
+Token 计费还支持独立的 `max_reasoning_effort_multiplier`。仅最终转发档位为 `max` 时生效；Fable 5.1 沿用本次上游同步的默认 `3x`，渠道可用有限正数覆盖（`1` 表示不加价），未配置时继承模型默认。该规则作用于全部 token 成本桶，并与当前价格、服务层级、区间及分时倍率组合；按次、图片/视频按次和搜索附加费用不乘此倍率。原始请求为 `max` 但策略降档后，按最终档位结算。账号统计使用模型文件默认价时同样应用最终档位；自定义统计价保持独立最终成本，`ApplyPricingToAccountStats` 复用已算出的 `total_cost`，两者均不重复叠加。渠道字段通过 `268_channel_max_reasoning_effort_multiplier.sql` 持久化，账号统计规则不接受此字段。
 
 缓存写入可选地拆成 `cache_write_price`（5 分钟）和 `cache_write_1h_price`（1 小时）两档；1h 列为 NULL 时继续把旧列用于两档，保证历史渠道和账号统计规则的结算不变。该字段同时适用于渠道默认价、token 区间和账号统计价，显式 0 仍表示免费；分档用量缺失时按旧聚合 token 数回退。数据库迁移为 `261_channel_cache_write_1h_pricing.sql`。
 
