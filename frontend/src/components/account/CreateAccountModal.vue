@@ -5909,7 +5909,6 @@ const resetForm = () => {
   upstreamUsageWalletAccessToken.value = ''
   upstreamUsageWalletUserId.value = ''
   upstreamRequestIdHeader.value = ''
-  upstreamBillingAutoProbeEnabled.value = true
   editQuotaLimit.value = null
   editQuotaDailyLimit.value = null
   editQuotaWeeklyLimit.value = null
